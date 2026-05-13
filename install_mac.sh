@@ -3,13 +3,14 @@ set -e
 
 INSTALL_DIR="$HOME/.local/bin"
 SCRIPT_NAME="codex-pet"
+VENV_DIR="$HOME/.local/share/codex-pet/venv"
 
 echo "=== Codex Pet for macOS — installer ==="
 echo
 
 # ── Python 3.10+ check ────────────────────────────────────────────────────────
-# Prefer a Homebrew python over the system one (Apple's Python 3.9 from
-# Xcode CLT can't build pyobjc-core 12 from source).
+# Prefer Homebrew Python over Apple's system Python 3.9 (Xcode CLT), which
+# cannot build pyobjc-core 12 from source.
 
 PY=""
 for candidate in python3.13 python3.12 python3.11 python3.10; do
@@ -18,11 +19,7 @@ for candidate in python3.13 python3.12 python3.11 python3.10; do
         break
     fi
 done
-
-# Fall back to whatever python3 resolves to, then check its version.
-if [ -z "$PY" ]; then
-    PY="python3"
-fi
+[ -z "$PY" ] && PY="python3"
 
 PY_MINOR=$("$PY" -c "import sys; print(sys.version_info.minor)")
 PY_MAJOR=$("$PY" -c "import sys; print(sys.version_info.major)")
@@ -31,7 +28,7 @@ if [ "$PY_MAJOR" -lt 3 ] || { [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 10 ]; }
     echo "ERROR: Python 3.10+ is required (found $($PY --version 2>&1))."
     echo
     echo "The system Python 3.9 bundled with Xcode Command Line Tools cannot"
-    echo "build the pyobjc-core extension. Install a newer Python first:"
+    echo "build pyobjc-core. Install a newer Python first:"
     echo
     echo "  brew install python@3.11"
     echo
@@ -40,18 +37,31 @@ if [ "$PY_MAJOR" -lt 3 ] || { [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 10 ]; }
 fi
 
 echo "Using $($PY --version 2>&1) at $(command -v "$PY")"
-PIP="$PY -m pip"
+
+# ── Virtual environment ───────────────────────────────────────────────────────
+# Homebrew Python 3.13+ is PEP 668 "externally managed" — pip install --user
+# is blocked. A dedicated venv sidesteps this cleanly.
+
+if [ ! -d "$VENV_DIR" ]; then
+    echo "Creating venv: $VENV_DIR"
+    "$PY" -m venv "$VENV_DIR"
+else
+    echo "Venv exists: $VENV_DIR"
+fi
+
+VENV_PY="$VENV_DIR/bin/python"
+VENV_PIP="$VENV_DIR/bin/pip"
 
 # ── Dependencies ──────────────────────────────────────────────────────────────
 echo "Checking dependencies..."
 
 MISSING_PIP=()
-"$PY" -c "from PIL import Image" 2>/dev/null || MISSING_PIP+=("Pillow")
-"$PY" -c "import AppKit"         2>/dev/null || MISSING_PIP+=("pyobjc-framework-Cocoa")
+"$VENV_PY" -c "from PIL import Image" 2>/dev/null || MISSING_PIP+=("Pillow")
+"$VENV_PY" -c "import AppKit"         2>/dev/null || MISSING_PIP+=("pyobjc-framework-Cocoa")
 
 if [ ${#MISSING_PIP[@]} -gt 0 ]; then
-    echo "Installing Python packages: ${MISSING_PIP[*]}"
-    $PIP install --user "${MISSING_PIP[@]}"
+    echo "Installing into venv: ${MISSING_PIP[*]}"
+    "$VENV_PIP" install "${MISSING_PIP[@]}"
 else
     echo "  All dependencies satisfied."
 fi
@@ -61,14 +71,12 @@ mkdir -p "$HOME/pets"
 echo "Pets library: ~/pets/"
 echo "  Drop any .codex-pet.zip from codex-pets.net into that folder."
 
-# ── Install script ────────────────────────────────────────────────────────────
+# ── Install launcher ──────────────────────────────────────────────────────────
+# Point the shebang at the venv Python so 'codex-pet' always finds the packages.
 mkdir -p "$INSTALL_DIR"
-# Embed the correct interpreter in the shebang so 'codex-pet' always uses
-# the Python that has the packages installed.
-PY_ABS=$(command -v "$PY")
-{ echo "#!$PY_ABS"; tail -n +2 desktop_pet.py; } > "$INSTALL_DIR/$SCRIPT_NAME"
+{ printf '#!%s\n' "$VENV_PY"; tail -n +2 desktop_pet.py; } > "$INSTALL_DIR/$SCRIPT_NAME"
 chmod +x "$INSTALL_DIR/$SCRIPT_NAME"
-echo "Installed: $INSTALL_DIR/$SCRIPT_NAME  (interpreter: $PY_ABS)"
+echo "Installed: $INSTALL_DIR/$SCRIPT_NAME  (venv: $VENV_DIR)"
 
 # ── PATH check ───────────────────────────────────────────────────────────────
 if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
@@ -80,4 +88,4 @@ fi
 
 echo
 echo "Done! Run with:  codex-pet"
-echo "Or:              $PY desktop_pet.py"
+echo "Or:              $VENV_PY desktop_pet.py"

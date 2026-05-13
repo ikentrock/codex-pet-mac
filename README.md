@@ -28,9 +28,12 @@ bash install_mac.sh
 Or manually (with Python 3.10+):
 
 ```bash
-python3.11 -m pip install --user Pillow pyobjc-framework-Cocoa
-mkdir -p ~/pets
-cp desktop_pet.py ~/.local/bin/codex-pet
+python3.11 -m venv ~/.local/share/codex-pet/venv
+~/.local/share/codex-pet/venv/bin/pip install Pillow pyobjc-framework-Cocoa
+mkdir -p ~/pets ~/Library/bin
+# launcher with venv shebang
+{ printf '#!/Users/$USER/.local/share/codex-pet/venv/bin/python\n'; tail -n +2 desktop_pet.py; } \
+  > ~/.local/bin/codex-pet
 chmod +x ~/.local/bin/codex-pet
 ```
 
