@@ -66,10 +66,12 @@ else
     echo "  All dependencies satisfied."
 fi
 
-# ── Pets directory ────────────────────────────────────────────────────────────
-mkdir -p "$HOME/pets"
-echo "Pets library: ~/pets/"
-echo "  Drop any .codex-pet.zip from codex-pets.net into that folder."
+# ── Pets directories ─────────────────────────────────────────────────────────
+mkdir -p "$HOME/pets" "$HOME/.codex/pets"
+echo "Pets libraries:"
+echo "  ~/pets/        (primary)"
+echo "  ~/.codex/pets/ (secondary — shared with codex-pets.net app)"
+echo "  Drop any .codex-pet.zip into either folder."
 
 # ── Install launcher ──────────────────────────────────────────────────────────
 # Point the shebang at the venv Python so 'codex-pet' always finds the packages.
