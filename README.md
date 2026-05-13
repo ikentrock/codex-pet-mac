@@ -7,9 +7,15 @@ Loads any `.codex-pet.zip` file and animates the sprite on your desktop — tran
 ## Requirements
 
 - macOS 11+
-- Python 3.10+
+- **Python 3.10+** — the system Python 3.9 bundled with Xcode Command Line Tools cannot build `pyobjc-core` from source; use Homebrew Python instead
 - `Pillow` — WebP spritesheet loading
 - `pyobjc-framework-Cocoa` — AppKit bindings
+
+> **Don't have Python 3.10+?** Install it with Homebrew:
+> ```bash
+> brew install python@3.11
+> ```
+> The installer detects Homebrew Python automatically.
 
 ## Install
 
@@ -19,10 +25,10 @@ cd codex-pet-mac
 bash install_mac.sh
 ```
 
-Or manually:
+Or manually (with Python 3.10+):
 
 ```bash
-pip3 install --user Pillow pyobjc-framework-Cocoa
+python3.11 -m pip install --user Pillow pyobjc-framework-Cocoa
 mkdir -p ~/pets
 cp desktop_pet.py ~/.local/bin/codex-pet
 chmod +x ~/.local/bin/codex-pet
