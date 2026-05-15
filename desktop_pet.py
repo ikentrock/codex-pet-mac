@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Codex Pet for macOS — desktop companion.
-Loads any .codex-pet.zip from ~/pets/ and animates the sprite on your desktop.
+DeskPet Mac — macOS desktop companion runtime.
+Loads any .codex-pet.zip from ~/DeskPets/ and animates the sprite on your desktop.
 
 Usage:
-  desktop_pet_mac.py [pet.codex-pet.zip] [--scale 0.5]
-  (no argument = first pet found in ~/pets/)
+  desktop_pet.py [pet.codex-pet.zip] [--scale 0.5]
+  (no argument = first pet found in ~/DeskPets/)
 
 Controls:
   Left-click     Trigger waving animation
@@ -18,7 +18,7 @@ from PIL import Image
 
 import objc
 from AppKit import (
-    NSApplication, NSWindow, NSView, NSTimer, NSColor, NSImage,
+    NSApplication, NSWindow, NSView, NSTimer, NSColor, NSImage, NSEvent,
     NSScreen, NSMenu, NSMenuItem,
     NSWindowStyleMaskBorderless, NSBackingStoreBuffered,
     NSFloatingWindowLevel,
@@ -31,8 +31,8 @@ from AppKit import (
 )
 from Foundation import NSObject, NSMakeRect, NSMakePoint
 
-PETS_DIR     = os.path.expanduser("~/pets")
-PETS_DIR_ALT = os.path.expanduser("~/.codex/pets")
+PETS_DIR     = os.path.expanduser("~/DeskPets")
+PETS_DIR_ALT = os.path.expanduser("~/.deskpet/pets")
 TILE_W, TILE_H = 192, 208
 COLS, ROWS     = 8, 9
 
@@ -69,7 +69,7 @@ def _count_frames(sheet: Image.Image, row: int) -> int:
     for col in range(COLS):
         tile = sheet.crop((col * TILE_W, row * TILE_H,
                            (col + 1) * TILE_W, (row + 1) * TILE_H))
-        if max(px[3] for px in tile.getdata()) > 10:
+        if tile.getchannel("A").getextrema()[1] > 10:
             count = col + 1
         else:
             break
@@ -121,7 +121,7 @@ def _load_pet(zip_path: str, scale: float):
 # ── Autostart (LaunchAgent) ───────────────────────────────────────────────────
 
 LAUNCHAGENT_DIR  = os.path.expanduser("~/Library/LaunchAgents")
-LAUNCHAGENT_FILE = os.path.join(LAUNCHAGENT_DIR, "net.codex-pet.desktop.plist")
+LAUNCHAGENT_FILE = os.path.join(LAUNCHAGENT_DIR, "com.ikentrock.deskpet.plist")
 _SCRIPT = os.path.abspath(__file__)
 
 
@@ -136,7 +136,7 @@ def _write_autostart(zip_path: str, scale: float):
         '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"'
         ' "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n'
         '<plist version="1.0"><dict>\n'
-        '  <key>Label</key><string>net.codex-pet.desktop</string>\n'
+        '  <key>Label</key><string>com.ikentrock.deskpet</string>\n'
         '  <key>ProgramArguments</key><array>\n'
         f'    <string>{sys.executable}</string>\n'
         f'    <string>{_SCRIPT}</string>\n'
@@ -203,8 +203,10 @@ class PetView(NSView):
             return None
         self._pet         = pet
         self._dragging    = False
-        self._last_drag_x = 0.0
-        self._last_drag_y = 0.0
+        self._drag_mouse_x = 0.0
+        self._drag_mouse_y = 0.0
+        self._drag_window_x = 0.0
+        self._drag_window_y = 0.0
         return self
 
     def isOpaque(self):
@@ -225,10 +227,13 @@ class PetView(NSView):
 
     # ── Input ─────────────────────────────────────────────────────────────────
 
-    def mouseDown_(self, event):
-        loc = event.locationInWindow()
-        self._last_drag_x = loc.x
-        self._last_drag_y = loc.y
+    def mouseDown_(self, _event):
+        loc = NSEvent.mouseLocation()
+        pet = self._pet
+        self._drag_mouse_x = loc.x
+        self._drag_mouse_y = loc.y
+        self._drag_window_x = pet._x
+        self._drag_window_y = pet._y
         self._dragging = False
 
     def mouseUp_(self, _event):
@@ -238,12 +243,6 @@ class PetView(NSView):
         self._pet._enter("action")
 
     def mouseDragged_(self, event):
-        loc  = event.locationInWindow()
-        ddx  = loc.x - self._last_drag_x
-        ddy  = loc.y - self._last_drag_y
-        self._last_drag_x = loc.x
-        self._last_drag_y = loc.y
-
         if not self._dragging:
             self._dragging         = True
             self._pet._is_dragging = True
@@ -252,8 +251,11 @@ class PetView(NSView):
             self._pet._ftimer      = 0.0
 
         pet   = self._pet
-        new_x = max(pet._sx, min(pet._sx + pet._sw - pet._tw, pet._x + ddx))
-        new_y = max(pet._sy, min(pet._sy + pet._sh - pet._th, pet._y + ddy))
+        loc   = NSEvent.mouseLocation()
+        dx    = loc.x - self._drag_mouse_x
+        dy    = loc.y - self._drag_mouse_y
+        new_x = max(pet._sx, min(pet._sx + pet._sw - pet._tw, self._drag_window_x + dx))
+        new_y = max(pet._sy, min(pet._sy + pet._sh - pet._th, self._drag_window_y + dy))
         pet._x, pet._y = new_x, new_y
         pet._window.setFrameOrigin_(NSMakePoint(new_x, new_y))
 
@@ -550,7 +552,7 @@ def main():
         pets = list_pets()
         if not pets:
             print(f"No .codex-pet.zip files found in {PETS_DIR}")
-            print("Download pets from codex-pets.net and drop them into ~/pets/")
+            print("Drop any .codex-pet.zip pet bundle into ~/DeskPets/")
             sys.exit(1)
         zip_path = pets[0]
 

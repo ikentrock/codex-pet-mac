@@ -2,10 +2,10 @@
 set -e
 
 INSTALL_DIR="$HOME/.local/bin"
-SCRIPT_NAME="codex-pet"
-VENV_DIR="$HOME/.local/share/codex-pet/venv"
+SCRIPT_NAME="deskpet"
+VENV_DIR="$HOME/.local/share/deskpet/venv"
 
-echo "=== Codex Pet for macOS — installer ==="
+echo "=== DeskPet Mac — installer ==="
 echo
 
 # ── Python 3.10+ check ────────────────────────────────────────────────────────
@@ -67,14 +67,14 @@ else
 fi
 
 # ── Pets directories ─────────────────────────────────────────────────────────
-mkdir -p "$HOME/pets" "$HOME/.codex/pets"
+mkdir -p "$HOME/DeskPets" "$HOME/.deskpet/pets"
 echo "Pets libraries:"
-echo "  ~/pets/        (primary)"
-echo "  ~/.codex/pets/ (secondary — shared with codex-pets.net app)"
+echo "  ~/DeskPets/        (primary)"
+echo "  ~/.deskpet/pets/   (secondary)"
 echo "  Drop any .codex-pet.zip into either folder."
 
 # ── Install launcher ──────────────────────────────────────────────────────────
-# Point the shebang at the venv Python so 'codex-pet' always finds the packages.
+# Point the shebang at the venv Python so 'deskpet' always finds the packages.
 mkdir -p "$INSTALL_DIR"
 { printf '#!%s\n' "$VENV_PY"; tail -n +2 desktop_pet.py; } > "$INSTALL_DIR/$SCRIPT_NAME"
 chmod +x "$INSTALL_DIR/$SCRIPT_NAME"
@@ -89,5 +89,5 @@ if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
 fi
 
 echo
-echo "Done! Run with:  codex-pet"
+echo "Done! Run with:  deskpet"
 echo "Or:              $VENV_PY desktop_pet.py"
