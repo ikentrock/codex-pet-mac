@@ -172,6 +172,14 @@ for additional details.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
 
+## Commercial development
+
+This repository contains the open desktop pet runtime.
+
+The commercial DeskPet product, including AI-agent behavior, proprietary characters, premium assets, cloud features, account systems, subscriptions, signed installers, and enterprise functionality, is developed separately by Suber Systems.
+
+The open-source license for this repository does not grant rights to Suber Systems trademarks, logos, product names, mascots, artwork, characters, or commercial service components.
+
 ## Security
 
 See [SECURITY.md](SECURITY.md).
