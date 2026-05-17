@@ -69,10 +69,23 @@ Pets are loaded from two directories (both optional):
 ### Context menu
 
 - **Pet list** — switch instantly between all pets in your library
+- **Size ▸** — S (×0.25) / M (×0.50) / L (×0.75); resizes live without restart
+- **Personality ▸** — choose a personality mode (see below)
 - **Enable movement** — pet wanders around the screen
 - **Run on startup** — register/remove the autostart entry for your OS
 - **Keep screen awake** — prevent display sleep while the pet is running
 - **Quit**
+
+### Personalities
+
+| Mode | Behaviour |
+|------|-----------|
+| **Friendly** | Balanced mix of walking and idle animations |
+| **Focused** | Stays mostly still; fires a waiting nudge every 60–180 s |
+| **Playful** | Chases the cursor when movement is on; very active otherwise |
+
+Settings (pet, scale, personality, movement) are saved automatically to
+`~/.deskpet/settings.json` and restored on next launch.
 
 ## Pet bundle format
 
@@ -91,7 +104,7 @@ spritesheet.webp  # RGBA spritesheet: 192×208px tiles, 8 cols × 9 rows
 | 3 | Waving | Left-click / drop |
 | 4 | Jumping | Dragging |
 | 5 | Failed | Sleeping (after 60 s idle) |
-| 6 | Waiting | Moving vertically |
+| 6 | Waiting | Focused personality nudge |
 | 7 | Running | *(reserved)* |
 | 8 | Review | Rare special event |
 
