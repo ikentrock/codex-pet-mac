@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 DeskPet — desktop companion for Ubuntu/GNOME.
-Loads any .codex-pet.zip from ~/pets/ and animates the sprite on your desktop.
+Loads any .codex-pet.zip from ~/pets/ or ~/.deskpet/pets/ and animates
+the sprite on your desktop.
 
 Usage:
   desktop_pet.py [pet.codex-pet.zip] [--scale 0.5]
@@ -10,7 +11,7 @@ Usage:
 Controls:
   Left-click     Trigger action animation
   Left-drag      Pick up and move the pet (plays jumping animation)
-  Right-click    Context menu: change pet · toggle movement · quit
+  Right-click    Context menu: change pet · size · personality · movement · quit
 """
 
 import sys, os, io
@@ -35,9 +36,13 @@ from PIL import Image
 from core.bundle import list_pets as _list_pets, load_pet_pil, pet_display_name, parse_cli
 from core.state import PetState
 from core.constants import TILE_W, TILE_H
+from core.settings import load as load_settings, save as save_settings
 
 PETS_DIR     = os.path.expanduser("~/pets")
 PETS_DIR_ALT = os.path.expanduser("~/.deskpet/pets")
+
+_SCALES       = [("S  (×0.25)", 0.25), ("M  (×0.50)", 0.50), ("L  (×0.75)", 0.75)]
+_PERSONALITIES = [("Friendly", "friendly"), ("Focused", "focused"), ("Playful", "playful")]
 
 
 def list_pets() -> list[str]:
@@ -155,10 +160,11 @@ def _dbus_uninhibit_sleep(cookie: int):
 
 class DesktopPet(Gtk.Window):
 
-    def __init__(self, zip_path: str, scale: float = 0.5):
+    def __init__(self, zip_path: str, scale: float = 0.5, settings: dict | None = None):
         super().__init__(title="DeskPet")
         self._scale    = scale
         self._zip_path = zip_path
+        self._settings = settings or {}
 
         screen = self.get_screen()
         vis = screen.get_rgba_visual()
@@ -180,12 +186,22 @@ class DesktopPet(Gtk.Window):
         self._name, self._pixbufs, self._regions, self._anims = _load_pet(zip_path, scale)
         self._ps = PetState(sx=0, sy=0, sw=sw, sh=sh, tw=tw, th=th)
 
+        if self._settings.get("movement_enabled"):
+            self._ps.set_moving(True)
+        self._ps.set_personality(self._settings.get("personality_style", "friendly"))
+
         self._sleep_cookie = None
         self._dragging     = False
         self._drag_mouse_x = 0.0
         self._drag_mouse_y = 0.0
         self._drag_start_x = 0.0
         self._drag_start_y = 0.0
+
+        # Pointer device for Playful mouse-chase cursor tracking
+        try:
+            self._gdk_pointer = Gdk.Display.get_default().get_default_seat().get_pointer()
+        except Exception:
+            self._gdk_pointer = None
 
         self.set_default_size(tw, th)
         self.move(int(self._ps.x), int(self._ps.y))
@@ -210,15 +226,44 @@ class DesktopPet(Gtk.Window):
         row = self._anims[self._ps.anim][0]
         self.input_shape_combine_region(self._regions[row][self._ps.fidx])
 
-    def _load(self, zip_path: str):
+    def _switch_pet(self, zip_path: str):
         self._zip_path = zip_path
         self._name, self._pixbufs, self._regions, self._anims = _load_pet(zip_path, self._scale)
-
-    def _switch_pet(self, zip_path: str):
-        self._load(zip_path)
         self._ps.enter("idle")
         self._update_input_shape()
         self.queue_draw()
+        self._save_settings()
+
+    def _apply_scale(self, scale: float):
+        self._scale = scale
+        tw, th = int(TILE_W * scale), int(TILE_H * scale)
+        self._name, self._pixbufs, self._regions, self._anims = _load_pet(self._zip_path, scale)
+        self._ps.resize(tw, th)
+        self.set_resizable(True)
+        self.resize(tw, th)
+        self.set_resizable(False)
+        self.move(int(self._ps.x), int(self._ps.y))
+        self._update_input_shape()
+        self.queue_draw()
+        self._save_settings()
+        if _autostart_enabled():
+            _write_autostart(self._zip_path, scale)
+
+    def _apply_personality(self, name: str):
+        self._ps.set_personality(name)
+        self._save_settings()
+
+    def _save_settings(self):
+        ps   = self._ps
+        data = {
+            **self._settings,
+            "pet_path":          self._zip_path,
+            "pet_scale":         self._scale,
+            "movement_enabled":  ps.moving,
+            "personality_style": ps.personality,
+        }
+        save_settings(data)
+        self._settings = data
 
     # ── Context menu ──────────────────────────────────────────────────────────
 
@@ -280,6 +325,7 @@ class DesktopPet(Gtk.Window):
             sp(s)
             box.pack_start(s, False, False, 0)
 
+        # Switch Pet
         for path in list_pets():
             name = pet_display_name(path)
             mark = "● " if path == self._zip_path else "  "
@@ -287,8 +333,23 @@ class DesktopPet(Gtk.Window):
             row(mark + name, lambda pp=p: self._switch_pet(pp))
         sep()
 
+        # Size
+        for label, sc in _SCALES:
+            mark = "● " if abs(sc - self._scale) < 0.01 else "  "
+            s = sc
+            row(mark + label, lambda ss=s: self._apply_scale(ss))
+        sep()
+
+        # Personality
+        for label, pname in _PERSONALITIES:
+            mark = "● " if pname == ps.personality else "  "
+            n = pname
+            row(mark + label, lambda nn=n: self._apply_personality(nn))
+        sep()
+
         move_mark = "☑  " if ps.moving else "☐  "
-        row(move_mark + "Enable movement", lambda: ps.set_moving(not ps.moving))
+        row(move_mark + "Enable movement",
+            lambda: (ps.set_moving(not ps.moving), self._save_settings()))
 
         start_mark = "☑  " if _autostart_enabled() else "☐  "
         row(start_mark + "Run on startup",
@@ -362,6 +423,13 @@ class DesktopPet(Gtk.Window):
     # ── Tick ──────────────────────────────────────────────────────────────────
 
     def _tick(self) -> bool:
+        if self._gdk_pointer is not None:
+            try:
+                result = self._gdk_pointer.get_position()
+                self._ps.update_cursor(float(result[1]), float(result[2]))
+            except Exception:
+                pass
+
         prev_fidx        = self._ps.fidx
         position_changed = self._ps.tick(0.016, self._anims)
         if position_changed:
@@ -385,22 +453,27 @@ class DesktopPet(Gtk.Window):
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 def main():
-    zip_path, scale = parse_cli(sys.argv[1:])
+    settings        = load_settings()
+    scale_explicit  = "--scale" in sys.argv
+    zip_str, scale_cli = parse_cli(sys.argv[1:])
+    scale = scale_cli if scale_explicit else settings.get("pet_scale", 0.5)
 
-    if not zip_path:
+    if not zip_str:
+        zip_str = settings.get("pet_path")
+
+    if zip_str and not os.path.exists(zip_str):
+        zip_str = None  # saved pet was deleted; fall through to auto-select
+
+    if not zip_str:
         pets = list_pets()
         if not pets:
             print(f"No .codex-pet.zip files found in {PETS_DIR}")
             print("Drop .codex-pet.zip pet bundles into ~/pets/")
             sys.exit(1)
-        zip_path = pets[0]
-
-    if not os.path.exists(zip_path):
-        print(f"File not found: {zip_path}")
-        sys.exit(1)
+        zip_str = pets[0]
 
     os.makedirs(PETS_DIR, exist_ok=True)
-    DesktopPet(zip_path, scale=scale)
+    DesktopPet(zip_str, scale=scale, settings=settings)
     Gtk.main()
 
 

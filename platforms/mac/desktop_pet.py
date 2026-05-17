@@ -10,10 +10,10 @@ Usage:
 Controls:
   Left-click     Trigger waving animation
   Left-drag      Pick up and move the pet (plays jumping animation)
-  Right-click    Context menu: change pet · toggle movement · quit
+  Right-click    Context menu
 """
 
-import sys, os, io, zipfile
+import sys, os, io, shutil, zipfile
 
 # Locate the shared core package: prefer the installed copy, fall back to repo.
 _share = os.path.expanduser("~/.local/share/deskpet")
@@ -26,7 +26,8 @@ for _p in (_share, _repo):
 from PIL import Image
 import objc
 from AppKit import (
-    NSApplication, NSWindow, NSView, NSTimer, NSColor, NSImage, NSEvent,
+    NSApplication, NSWindow, NSView, NSTimer, NSColor, NSImage, NSImageView,
+    NSImageScaleAxesIndependently, NSEvent,
     NSScreen, NSMenu, NSMenuItem,
     NSWindowStyleMaskBorderless, NSBackingStoreBuffered,
     NSFloatingWindowLevel,
@@ -34,17 +35,19 @@ from AppKit import (
     NSWindowCollectionBehaviorStationary,
     NSWindowCollectionBehaviorIgnoresCycle,
     NSApplicationActivationPolicyAccessory,
-    NSCompositingOperationSourceOver,
-    NSRectFill, NSZeroRect,
 )
-from Foundation import NSObject, NSMakeRect, NSMakePoint
+from Foundation import NSObject, NSMakeRect, NSMakePoint, NSMakeSize
 
-from core.bundle import list_pets as _list_pets, load_pet_pil, pet_display_name, parse_cli
-from core.state import PetState
+from core.bundle   import list_pets as _list_pets, load_pet_pil, pet_display_name, parse_cli
+from core.state    import PetState
+from core.settings import load as load_settings, save as save_settings
 from core.constants import TILE_W, TILE_H
 
 PETS_DIR     = os.path.expanduser("~/DeskPets")
 PETS_DIR_ALT = os.path.expanduser("~/.deskpet/pets")
+
+_SCALES = [("S  (×0.25)", 0.25), ("M  (×0.50)", 0.50), ("L  (×0.75)", 0.75)]
+_PERSONALITIES = [("Friendly", "friendly"), ("Focused", "focused"), ("Playful", "playful")]
 
 
 def list_pets() -> list[str]:
@@ -67,11 +70,25 @@ def _load_pet(zip_path: str, scale: float):
     return name, frames, anims
 
 
+# ── Default pet auto-install ──────────────────────────────────────────────────
+
+_SCRIPT = os.path.abspath(__file__)
+
+def _install_default_pet():
+    """Copy the bundled default pet to ~/DeskPets/ on first run, if present."""
+    bundled = os.path.join(os.path.dirname(_SCRIPT), "default.codex-pet.zip")
+    if not os.path.isfile(bundled):
+        return
+    if list_pets():
+        return
+    os.makedirs(PETS_DIR, exist_ok=True)
+    shutil.copy2(bundled, os.path.join(PETS_DIR, os.path.basename(bundled)))
+
+
 # ── Autostart (LaunchAgent) ───────────────────────────────────────────────────
 
 LAUNCHAGENT_DIR  = os.path.expanduser("~/Library/LaunchAgents")
 LAUNCHAGENT_FILE = os.path.join(LAUNCHAGENT_DIR, "com.ikentrock.deskpet.plist")
-_SCRIPT = os.path.abspath(__file__)
 
 
 def _autostart_enabled() -> bool:
@@ -136,14 +153,13 @@ class _MenuHandler(NSObject):
             cb()
 
 
-# ── View ──────────────────────────────────────────────────────────────────────
+# ── View (event handling only — rendering via NSImageView) ────────────────────
 
 class PetView(NSView):
 
     def initWithPet_(self, pet):
-        self = objc.super(PetView, self).initWithFrame_(
-            NSMakeRect(0, 0, pet._ps.tw, pet._ps.th)
-        )
+        tw, th = pet._ps.tw, pet._ps.th
+        self = objc.super(PetView, self).initWithFrame_(NSMakeRect(0, 0, tw, th))
         if self is None:
             return None
         self._pet          = pet
@@ -152,6 +168,12 @@ class PetView(NSView):
         self._drag_mouse_y = 0.0
         self._drag_start_x = 0.0
         self._drag_start_y = 0.0
+
+        # NSImageView for correct RGBA compositing on macOS 14+
+        self._imgv = NSImageView.alloc().initWithFrame_(self.bounds())
+        self._imgv.setWantsLayer_(True)
+        self._imgv.setImageScaling_(NSImageScaleAxesIndependently)
+        self.addSubview_(self._imgv)
         return self
 
     def isOpaque(self):
@@ -160,15 +182,10 @@ class PetView(NSView):
     def acceptsFirstMouse_(self, _event):
         return True
 
-    def drawRect_(self, _rect):
-        ps  = self._pet._ps
-        NSColor.clearColor().set()
-        NSRectFill(self.bounds())
-        row = self._pet._anims[ps.anim][0]
-        img = self._pet._frames[row][ps.fidx]
-        img.drawInRect_fromRect_operation_fraction_(
-            self.bounds(), NSZeroRect, NSCompositingOperationSourceOver, 1.0
-        )
+    def resizeToTW_TH_(self, tw, th):
+        frame = NSMakeRect(0, 0, tw, th)
+        self.setFrame_(frame)
+        self._imgv.setFrame_(frame)
 
     def mouseDown_(self, _event):
         ps = self._pet._ps
@@ -247,6 +264,8 @@ class DesktopPet:
             1.0 / 60.0, self._timer_target, "tick:", None, True
         )
 
+    # ── Pet / scale / personality ─────────────────────────────────────────────
+
     def _load(self, zip_path: str):
         self._zip_path = zip_path
         self._name, self._frames, self._anims = _load_pet(zip_path, self._scale)
@@ -254,52 +273,119 @@ class DesktopPet:
     def _switch_pet(self, zip_path: str):
         self._load(zip_path)
         self._ps.enter("idle")
-        self._view.setNeedsDisplay_(True)
+        self._save_settings()
+
+    def _apply_scale(self, scale: float):
+        if abs(scale - self._scale) < 0.01:
+            return
+        self._scale = scale
+        tw, th = int(TILE_W * scale), int(TILE_H * scale)
+        self._name, self._frames, self._anims = _load_pet(self._zip_path, scale)
+        self._ps.resize(tw, th)
+        # Resize window and image view in one step
+        self._window.setFrame_display_(
+            NSMakeRect(self._ps.x, self._ps.y, tw, th), True
+        )
+        self._view.resizeToTW_TH_(tw, th)
+        self._save_settings()
+        if _autostart_enabled():
+            _write_autostart(self._zip_path, scale)
+
+    def _apply_personality(self, name: str):
+        self._ps.set_personality(name)
+        self._save_settings()
+
+    def _save_settings(self):
+        save_settings({
+            "pet_path":          self._zip_path,
+            "pet_scale":         self._scale,
+            "movement_enabled":  self._ps.moving,
+            "personality_style": self._ps.personality,
+        })
+
+    # ── Context menu ──────────────────────────────────────────────────────────
 
     def _show_menu(self, event):
         menu      = NSMenu.alloc().init()
         menu.setAutoenablesItems_(False)
         callbacks = {}
-        next_tag  = [0]
+        tag       = [0]
 
-        def add(title, cb, checked=False):
-            item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
-                title, "doAction:", ""
-            )
-            item.setTag_(next_tag[0])
-            item.setState_(1 if checked else 0)
-            callbacks[next_tag[0]] = cb
-            next_tag[0] += 1
-            menu.addItem_(item)
+        def item(title, cb, checked=False, into=None):
+            m = into or menu
+            it = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+                title, "doAction:", "")
+            it.setTag_(tag[0])
+            it.setState_(1 if checked else 0)
+            callbacks[tag[0]] = cb
+            tag[0] += 1
+            m.addItem_(it)
 
-        for path in list_pets():
-            name = pet_display_name(path)
-            p    = path
-            add(("● " if path == self._zip_path else "  ") + name,
-                lambda pp=p: self._switch_pet(pp),
-                checked=(path == self._zip_path))
+        def submenu(title, build_fn):
+            parent = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+                title, None, "")
+            sub = NSMenu.alloc().initWithTitle_(title)
+            sub.setAutoenablesItems_(False)
+            build_fn(sub)
+            parent.setSubmenu_(sub)
+            menu.addItem_(parent)
+
+        # ── Switch Pet submenu ────────────────────────────────────────────────
+        def build_pets(sub):
+            for path in list_pets():
+                name = pet_display_name(path)
+                p    = path
+                item(("● " if path == self._zip_path else "  ") + name,
+                     lambda pp=p: self._switch_pet(pp),
+                     checked=(path == self._zip_path), into=sub)
+        submenu("Switch Pet ▸", build_pets)
+
+        # ── Size submenu ──────────────────────────────────────────────────────
+        def build_sizes(sub):
+            for label, s in _SCALES:
+                sc = s
+                item(label, lambda ss=sc: self._apply_scale(ss),
+                     checked=abs(self._scale - s) < 0.01, into=sub)
+        submenu("Size ▸", build_sizes)
+
+        # ── Personality submenu ───────────────────────────────────────────────
+        def build_personalities(sub):
+            for label, p in _PERSONALITIES:
+                pn = p
+                item(label, lambda pp=pn: self._apply_personality(pp),
+                     checked=(self._ps.personality == p), into=sub)
+        submenu("Personality ▸", build_personalities)
 
         menu.addItem_(NSMenuItem.separatorItem())
-        add("Enable movement",
-            lambda: self._ps.set_moving(not self._ps.moving),
-            checked=self._ps.moving)
-        add("Run on startup",
-            lambda: _write_autostart(self._zip_path, self._scale)
-                    if not _autostart_enabled() else _remove_autostart(),
-            checked=_autostart_enabled())
-        add("Keep screen awake",
-            lambda: self._apply_keep_awake(self._caffeinate is None),
-            checked=self._caffeinate is not None)
-        menu.addItem_(NSMenuItem.separatorItem())
-        add("Quit", lambda: NSApplication.sharedApplication().terminate_(None))
 
+        item("Enable movement",
+             lambda: (self._ps.set_moving(not self._ps.moving), self._save_settings()),
+             checked=self._ps.moving)
+        item("Run on startup",
+             lambda: _write_autostart(self._zip_path, self._scale)
+                     if not _autostart_enabled() else _remove_autostart(),
+             checked=_autostart_enabled())
+        item("Keep screen awake",
+             lambda: self._apply_keep_awake(self._caffeinate is None),
+             checked=self._caffeinate is not None)
+
+        menu.addItem_(NSMenuItem.separatorItem())
+        item("Quit", lambda: NSApplication.sharedApplication().terminate_(None))
+
+        # Attach handler to every item (recurse into submenus)
         handler = _MenuHandler.alloc().initWithCallbacks_(callbacks)
-        for i in range(menu.numberOfItems()):
-            item = menu.itemAtIndex_(i)
-            if not item.isSeparatorItem():
-                item.setTarget_(handler)
+        def attach(m):
+            for i in range(m.numberOfItems()):
+                it = m.itemAtIndex_(i)
+                if not it.isSeparatorItem():
+                    it.setTarget_(handler)
+                    if it.hasSubmenu():
+                        attach(it.submenu())
+        attach(menu)
 
         NSMenu.popUpContextMenu_withEvent_forView_(menu, event, self._view)
+
+    # ── Screen-awake ──────────────────────────────────────────────────────────
 
     def _apply_keep_awake(self, val: bool):
         import subprocess
@@ -314,29 +400,40 @@ class DesktopPet:
         if self._caffeinate:
             self._caffeinate.terminate()
 
+    # ── Tick ──────────────────────────────────────────────────────────────────
+
     def _tick(self):
-        dt = 1.0 / 60.0
+        dt  = 1.0 / 60.0
+        loc = NSEvent.mouseLocation()
+        self._ps.update_cursor(loc.x, loc.y)
+
         position_changed = self._ps.tick(dt, self._anims)
         if position_changed:
             self._window.setFrameOrigin_(NSMakePoint(self._ps.x, self._ps.y))
-        self._view.setNeedsDisplay_(True)
+
+        row = self._anims[self._ps.anim][0]
+        self._view._imgv.setImage_(self._frames[row][self._ps.fidx])
 
 
 # ── App delegate ──────────────────────────────────────────────────────────────
 
 class AppDelegate(NSObject):
 
-    def initWithZip_scale_(self, zip_path: str, scale: float):
+    def initWithZip_scale_settings_(self, zip_path, scale, settings):
         self = objc.super(AppDelegate, self).init()
         if self is None:
             return None
         self._zip_path = zip_path
         self._scale    = scale
+        self._settings = settings
         self._pet      = None
         return self
 
     def applicationDidFinishLaunching_(self, _note):
-        self._pet = DesktopPet(self._zip_path, self._scale)
+        pet = DesktopPet(self._zip_path, self._scale)
+        pet._ps.set_moving(self._settings.get("movement_enabled", False))
+        pet._ps.set_personality(self._settings.get("personality_style", "friendly"))
+        self._pet = pet
 
     def applicationWillTerminate_(self, _note):
         if self._pet:
@@ -346,15 +443,23 @@ class AppDelegate(NSObject):
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 def main():
-    zip_path, scale = parse_cli(sys.argv[1:])
+    settings   = load_settings()
+    zip_path, scale_arg = parse_cli(sys.argv[1:])
+    scale = scale_arg if "--scale" in sys.argv else settings["pet_scale"]
+
+    _install_default_pet()
 
     if not zip_path:
-        pets = list_pets()
-        if not pets:
-            print(f"No .codex-pet.zip files found in {PETS_DIR}")
-            print("Drop any .codex-pet.zip pet bundle into ~/DeskPets/")
-            sys.exit(1)
-        zip_path = pets[0]
+        saved = settings.get("pet_path")
+        if saved and os.path.exists(saved):
+            zip_path = saved
+        else:
+            pets = list_pets()
+            if not pets:
+                print(f"No .codex-pet.zip files found in {PETS_DIR}")
+                print("Drop any .codex-pet.zip pet bundle into ~/DeskPets/")
+                sys.exit(1)
+            zip_path = pets[0]
 
     if not os.path.exists(zip_path):
         print(f"File not found: {zip_path}")
@@ -365,7 +470,7 @@ def main():
     app = NSApplication.sharedApplication()
     app.setActivationPolicy_(NSApplicationActivationPolicyAccessory)
 
-    delegate = AppDelegate.alloc().initWithZip_scale_(zip_path, scale)
+    delegate = AppDelegate.alloc().initWithZip_scale_settings_(zip_path, scale, settings)
     app.setDelegate_(delegate)
     app.run()
 
