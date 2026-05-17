@@ -21,8 +21,15 @@ else
     echo "  All dependencies satisfied."
 fi
 
+# ── Shared core package ───────────────────────────────────────────────────────
+SHARE_DIR="$HOME/.local/share/deskpet"
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+mkdir -p "$SHARE_DIR"
+echo "Installing core package: $SHARE_DIR/core"
+cp -r "$REPO_ROOT/core" "$SHARE_DIR/"
+
 # ── Pets directory ────────────────────────────────────────────────────────────
-mkdir -p "$HOME/pets"
+mkdir -p "$HOME/pets" "$HOME/.deskpet/pets"
 echo "Pets library: ~/pets/"
 echo "  Drop any .codex-pet.zip pet bundles into that folder."
 

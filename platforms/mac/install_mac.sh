@@ -66,6 +66,12 @@ else
     echo "  All dependencies satisfied."
 fi
 
+# ── Shared core package ───────────────────────────────────────────────────────
+SHARE_DIR="$(dirname "$VENV_DIR")"   # ~/.local/share/deskpet
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+echo "Installing core package: $SHARE_DIR/core"
+cp -r "$REPO_ROOT/core" "$SHARE_DIR/"
+
 # ── Pets directories ─────────────────────────────────────────────────────────
 mkdir -p "$HOME/DeskPets" "$HOME/.deskpet/pets"
 echo "Pets libraries:"
