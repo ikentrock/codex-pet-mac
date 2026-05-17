@@ -75,14 +75,20 @@ def _load_pet(zip_path: str, scale: float):
 _SCRIPT = os.path.abspath(__file__)
 
 def _install_default_pet():
-    """Copy the bundled default pet to ~/DeskPets/ on first run, if present."""
-    bundled = os.path.join(os.path.dirname(_SCRIPT), "default.codex-pet.zip")
-    if not os.path.isfile(bundled):
-        return
+    """Seed ~/DeskPets/ from the repo's pets/ directory on first run."""
     if list_pets():
         return
+    repo_pets = os.path.normpath(
+        os.path.join(os.path.dirname(_SCRIPT), "..", "..", "pets")
+    )
+    if not os.path.isdir(repo_pets):
+        return
     os.makedirs(PETS_DIR, exist_ok=True)
-    shutil.copy2(bundled, os.path.join(PETS_DIR, os.path.basename(bundled)))
+    for f in os.listdir(repo_pets):
+        if f.endswith("-pet.zip"):
+            dst = os.path.join(PETS_DIR, f)
+            if not os.path.exists(dst):
+                shutil.copy2(os.path.join(repo_pets, f), dst)
 
 
 # ── Autostart (LaunchAgent) ───────────────────────────────────────────────────

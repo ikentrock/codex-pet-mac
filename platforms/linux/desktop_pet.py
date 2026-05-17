@@ -14,7 +14,7 @@ Controls:
   Right-click    Context menu: change pet · size · personality · movement · quit
 """
 
-import sys, os, io
+import sys, os, io, shutil
 
 # Locate the shared core package: prefer the installed copy, fall back to repo.
 _share = os.path.expanduser("~/.local/share/deskpet")
@@ -117,6 +117,26 @@ def _remove_autostart():
         os.remove(AUTOSTART_FILE)
     except FileNotFoundError:
         pass
+
+
+_SCRIPT = os.path.abspath(__file__)
+
+
+def _install_default_pet():
+    """Seed ~/pets/ from the repo's pets/ directory on first run."""
+    if list_pets():
+        return
+    repo_pets = os.path.normpath(
+        os.path.join(os.path.dirname(_SCRIPT), "..", "..", "pets")
+    )
+    if not os.path.isdir(repo_pets):
+        return
+    os.makedirs(PETS_DIR, exist_ok=True)
+    for f in os.listdir(repo_pets):
+        if f.endswith("-pet.zip"):
+            dst = os.path.join(PETS_DIR, f)
+            if not os.path.exists(dst):
+                shutil.copy2(os.path.join(repo_pets, f), dst)
 
 
 # ── Screen-sleep inhibit (D-Bus) ──────────────────────────────────────────────
@@ -473,6 +493,7 @@ def main():
         zip_str = pets[0]
 
     os.makedirs(PETS_DIR, exist_ok=True)
+    _install_default_pet()
     DesktopPet(zip_str, scale=scale, settings=settings)
     Gtk.main()
 

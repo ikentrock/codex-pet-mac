@@ -8,7 +8,7 @@ transparent, always-on-top desktop window.
 
 from __future__ import annotations
 
-import ctypes, os, sys
+import ctypes, os, shutil, sys
 
 # Locate the shared core package: prefer the installed copy, fall back to repo.
 _share = os.path.expanduser("~/.local/share/deskpet")
@@ -98,6 +98,21 @@ def remove_autostart() -> None:
         _startup_path().unlink()
     except FileNotFoundError:
         pass
+
+
+def _install_default_pet() -> None:
+    """Seed ~/pets/ from the repo's pets/ directory on first run."""
+    if list_pets():
+        return
+    repo_pets = (Path(__file__).resolve().parent / ".." / ".." / "pets").resolve()
+    if not repo_pets.is_dir():
+        return
+    PETS_DIR.mkdir(parents=True, exist_ok=True)
+    for f in repo_pets.iterdir():
+        if f.name.endswith("-pet.zip"):
+            dst = PETS_DIR / f.name
+            if not dst.exists():
+                shutil.copy2(f, dst)
 
 
 # ── Widget ────────────────────────────────────────────────────────────────────
@@ -322,6 +337,7 @@ def main(argv: list[str] | None = None) -> int:
 
     PETS_DIR.mkdir(parents=True, exist_ok=True)
     PETS_DIR_ALT.mkdir(parents=True, exist_ok=True)
+    _install_default_pet()
 
     if zip_str:
         zip_path = Path(zip_str).expanduser().resolve()

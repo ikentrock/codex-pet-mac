@@ -54,6 +54,18 @@ Write-Host "Installing dependencies..."
 
 New-Item -ItemType Directory -Force -Path (Join-Path $HOME "pets") | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $HOME ".deskpet\pets") | Out-Null
+
+# Copy bundled pets from the repo's pets/ directory (skip if already present)
+$RepoPets = Join-Path $PSScriptRoot "..\..\pets"
+if (Test-Path $RepoPets) {
+    Get-ChildItem -Path $RepoPets -Filter "*-pet.zip" | ForEach-Object {
+        $dst = Join-Path $HOME "pets\$($_.Name)"
+        if (-not (Test-Path $dst)) {
+            Copy-Item $_.FullName -Destination $dst
+            Write-Host "  Installed pet: $($_.Name)"
+        }
+    }
+}
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 
 $ScriptPath = Join-Path $PSScriptRoot "desktop_pet.py"

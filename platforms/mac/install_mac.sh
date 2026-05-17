@@ -77,7 +77,18 @@ mkdir -p "$HOME/DeskPets" "$HOME/.deskpet/pets"
 echo "Pets libraries:"
 echo "  ~/DeskPets/        (primary)"
 echo "  ~/.deskpet/pets/   (secondary)"
-echo "  Drop any .codex-pet.zip into either folder."
+
+# Copy bundled pets from the repo's pets/ directory (skip if already present)
+if [ -d "$REPO_ROOT/pets" ]; then
+    for f in "$REPO_ROOT/pets/"*-pet.zip; do
+        [ -f "$f" ] || continue
+        dst="$HOME/DeskPets/$(basename "$f")"
+        if [ ! -f "$dst" ]; then
+            cp "$f" "$dst"
+            echo "  Installed pet: $(basename "$f")"
+        fi
+    done
+fi
 
 # ── Install launcher ──────────────────────────────────────────────────────────
 # Point the shebang at the venv Python so 'deskpet' always finds the packages.

@@ -31,7 +31,18 @@ cp -r "$REPO_ROOT/core" "$SHARE_DIR/"
 # ── Pets directory ────────────────────────────────────────────────────────────
 mkdir -p "$HOME/pets" "$HOME/.deskpet/pets"
 echo "Pets library: ~/pets/"
-echo "  Drop any .codex-pet.zip pet bundles into that folder."
+
+# Copy bundled pets from the repo's pets/ directory (skip if already present)
+if [ -d "$REPO_ROOT/pets" ]; then
+    for f in "$REPO_ROOT/pets/"*-pet.zip; do
+        [ -f "$f" ] || continue
+        dst="$HOME/pets/$(basename "$f")"
+        if [ ! -f "$dst" ]; then
+            cp "$f" "$dst"
+            echo "  Installed pet: $(basename "$f")"
+        fi
+    done
+fi
 
 # ── Install script ────────────────────────────────────────────────────────────
 mkdir -p "$INSTALL_DIR"
