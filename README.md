@@ -51,8 +51,8 @@ Pets are loaded from two directories (both optional):
 | OS | Primary | Secondary |
 |----|---------|-----------|
 | macOS | `~/DeskPets/` | `~/.deskpet/pets/` |
-| Linux | `~/pets/` | `~/.codex/pets/` |
-| Windows | `%USERPROFILE%\pets\` | `%USERPROFILE%\.codex\pets\` |
+| Linux | `~/pets/` | `~/.deskpet/pets/` |
+| Windows | `%USERPROFILE%\pets\` | `%USERPROFILE%\.deskpet\pets\` |
 
 1. Obtain any `.codex-pet.zip` pet bundle
 2. Drop it into the primary directory for your OS

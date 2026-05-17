@@ -30,7 +30,7 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 | Directory | Notes |
 |-----------|-------|
 | `%USERPROFILE%\pets\` | Primary library |
-| `%USERPROFILE%\.codex\pets\` | Secondary library |
+| `%USERPROFILE%\.deskpet\pets\` | Secondary library |
 
 ## Usage
 

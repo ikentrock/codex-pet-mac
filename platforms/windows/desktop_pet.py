@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Codex Pet for Windows 11.
+DeskPet for Windows 11.
 
-Loads any .codex-pet.zip from ~/pets/ or ~/.codex/pets/ and animates it in a
+Loads any .codex-pet.zip from ~/pets/ or ~/.deskpet/pets/ and animates it in a
 transparent, always-on-top desktop window.
 """
 
@@ -29,7 +29,7 @@ from PySide6.QtWidgets import QApplication, QMenu, QWidget
 
 
 PETS_DIR = Path.home() / "pets"
-PETS_DIR_ALT = Path.home() / ".codex" / "pets"
+PETS_DIR_ALT = Path.home() / ".deskpet" / "pets"
 TILE_W, TILE_H = 192, 208
 COLS, ROWS = 8, 9
 
@@ -100,7 +100,7 @@ def _pil_to_pixmap(img: Image.Image) -> QPixmap:
 
 
 def load_pet(zip_path: Path, scale: float) -> LoadedPet:
-    tmp = Path(tempfile.mkdtemp(prefix="codex-pet-"))
+    tmp = Path(tempfile.mkdtemp(prefix="deskpet-"))
     try:
         with zipfile.ZipFile(zip_path) as archive:
             archive.extractall(tmp)
@@ -152,8 +152,8 @@ def set_keep_awake(enabled: bool) -> None:
 def startup_shortcut_path() -> Path:
     appdata = os.environ.get("APPDATA")
     if not appdata:
-        return Path.home() / "AppData" / "Roaming" / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup" / "Codex Pet.bat"
-    return Path(appdata) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup" / "Codex Pet.bat"
+        return Path.home() / "AppData" / "Roaming" / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup" / "DeskPet.bat"
+    return Path(appdata) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup" / "DeskPet.bat"
 
 
 def autostart_enabled() -> bool:
@@ -436,7 +436,7 @@ class DesktopPet(QWidget):
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run a Codex desktop pet on Windows 11.")
+    parser = argparse.ArgumentParser(description="Run a DeskPet on Windows 11.")
     parser.add_argument("pet", nargs="?", help="Path to a .codex-pet.zip file")
     parser.add_argument("--scale", type=float, default=0.5, help="Pet scale. Default: 0.5")
     return parser.parse_args(argv)
@@ -453,7 +453,7 @@ def choose_pet(path_arg: str | None) -> Path:
     if not pets:
         raise FileNotFoundError(
             f"No .codex-pet.zip files found in {PETS_DIR}. "
-            "Download pets from codex-pets.net and drop them into ~/pets/."
+            "Drop .codex-pet.zip pet bundles into ~/pets/."
         )
     return pets[0]
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Codex Pet — desktop companion for Ubuntu/GNOME.
+DeskPet — desktop companion for Ubuntu/GNOME.
 Loads any .codex-pet.zip from ~/pets/ and animates the sprite on your desktop.
 
 Usage:
@@ -24,7 +24,7 @@ import cairo
 from PIL import Image
 
 PETS_DIR       = os.path.expanduser("~/pets")
-PETS_DIR_ALT   = os.path.expanduser("~/.codex/pets")
+PETS_DIR_ALT   = os.path.expanduser("~/.deskpet/pets")
 TILE_W, TILE_H = 192, 208
 COLS, ROWS     = 8, 9
 
@@ -141,7 +141,7 @@ def _load_pet(zip_path: str, scale: float):
 
 # ── Autostart ─────────────────────────────────────────────────────────────────
 
-AUTOSTART_FILE = os.path.expanduser("~/.config/autostart/codex-pet.desktop")
+AUTOSTART_FILE = os.path.expanduser("~/.config/autostart/deskpet.desktop")
 _SCRIPT        = os.path.abspath(__file__)
 
 
@@ -155,7 +155,7 @@ def _write_autostart(zip_path: str, scale: float):
     content = (
         "[Desktop Entry]\n"
         "Type=Application\n"
-        "Name=Codex Pet\n"
+        "Name=DeskPet\n"
         f"Exec={exec_cmd}\n"
         "Hidden=false\n"
         "NoDisplay=false\n"
@@ -184,7 +184,7 @@ def _dbus_inhibit_sleep() -> int | None:
         )
         result = proxy.call_sync(
             "Inhibit",
-            GLib.Variant("(ss)", ("codex-pet", "Keep screen awake")),
+            GLib.Variant("(ss)", ("deskpet", "Keep screen awake")),
             Gio.DBusCallFlags.NONE, -1, None,
         )
         return result.unpack()[0]
@@ -597,7 +597,7 @@ def main():
         pets = list_pets()
         if not pets:
             print(f"No .codex-pet.zip files found in {PETS_DIR}")
-            print("Download pets from codex-pets.net and drop them into ~/pets/")
+            print("Drop .codex-pet.zip pet bundles into ~/pets/")
             sys.exit(1)
         zip_path = pets[0]
 

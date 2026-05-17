@@ -53,7 +53,7 @@ Write-Host "Installing dependencies..."
 & $VenvPip install -r (Join-Path $PSScriptRoot "requirements.txt")
 
 New-Item -ItemType Directory -Force -Path (Join-Path $HOME "pets") | Out-Null
-New-Item -ItemType Directory -Force -Path (Join-Path $HOME ".codex\pets") | Out-Null
+New-Item -ItemType Directory -Force -Path (Join-Path $HOME ".deskpet\pets") | Out-Null
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 
 $ScriptPath = Join-Path $PSScriptRoot "desktop_pet.py"
@@ -67,7 +67,7 @@ Write-Host ""
 Write-Host "Installed: $Launcher"
 Write-Host "Pets libraries:"
 Write-Host "  $HOME\pets"
-Write-Host "  $HOME\.codex\pets"
+Write-Host "  $HOME\.deskpet\pets"
 Write-Host ""
 Write-Host "Run with:"
 Write-Host "  $Launcher"

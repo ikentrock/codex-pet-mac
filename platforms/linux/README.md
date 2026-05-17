@@ -34,7 +34,7 @@ chmod +x ~/.local/bin/deskpet
 | Directory | Notes |
 |-----------|-------|
 | `~/pets/` | Primary library |
-| `~/.codex/pets/` | Secondary library |
+| `~/.deskpet/pets/` | Secondary library |
 
 ## Usage
 
