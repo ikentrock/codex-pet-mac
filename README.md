@@ -27,7 +27,7 @@ Compatible with `.codex-pet.zip` pet bundles.
 
 ```bash
 git clone https://github.com/ikentrock/deskpet
-cd codex-pet-mac
+cd deskpet
 bash install_mac.sh
 ```
 
